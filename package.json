@@ -15,7 +15,7 @@
   ],
   "type": "module",
   "bin": {
-    "wasm-ls-func": "./bin/ls-func.js"
+    "wasm-ls-func": "bin/ls-func.js"
   },
   "author": "niu2x",
   "license": "ISC",
