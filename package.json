@@ -1,0 +1,29 @@
+{
+  "name": "wasm-knife",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://gitee.com/niu2x/wasm-knife"
+  },
+  "keywords": [
+    "wasm"
+  ],
+  "type": "module",
+  "bin": {
+    "wasm-ls-func": "./bin/ls-func.js"
+  },
+  "author": "niu2x",
+  "license": "ISC",
+  "dependencies": {
+    "binaryen": "^118.0.0",
+    "posix-getopt": "^1.2.1"
+  },
+  "devDependencies": {
+    "vite": "^5.3.5"
+  }
+}
