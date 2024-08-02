@@ -15,7 +15,10 @@ function App() {
 			return WebAssembly.instantiate(m, {})
 		}).then((wasmModule)=>{
 			let code = wasmModule.exports.hello()
+			console.log(wasmModule.exports)
+			console.log(wasmModule)
 			setCode(code)
+			globalThis.wasmModule = wasmModule;
 		})
 
 	return <p>{code}</p>
