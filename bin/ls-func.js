@@ -23,6 +23,11 @@ while ((option = parser.getopt()) !== undefined) {
       config.export = true;
       break;
     }
+
+    case 't': {
+      config.table = true;
+      break;
+    }
   }
 }
 
@@ -40,15 +45,21 @@ if (optind < process.argv.length) {
       for (let n of allExportNames) {
         console.log(n.name)
       }
-
+    }
+    if (config.table) {
       console.log("Tables:")
-       allExportNames = wasmHelper.getAllExportTables();
+      let allExportNames = wasmHelper.getAllExportTables();
       for (let n of allExportNames) {
         console.log(n.name)
       }
-      
     }
   } else {
+    if (config.func) {
+      let allFunctionNames = wasmHelper.getAllFunctionNames();
+      for (let n of allFunctionNames) {
+        console.log(n)
+      }
+    }
 
     if (config.func) {
       let allFunctionNames = wasmHelper.getAllFunctionNames();
