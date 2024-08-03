@@ -10,3 +10,6 @@
 	  -n,                        dry run
 	  -o,                        output file
 	  -t,                        output WebAssembly Text
+
+Example:
+	wasm-trim-func -f main -t wasm/w2.wasm
