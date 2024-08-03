@@ -13,7 +13,7 @@ function App() {
 	let HEAP32
 	let HEAPU8
 
-	fetch("http://127.0.0.1:5173/wasm/build/w2.wasm")
+	fetch("http://127.0.0.1:5173/wasm/w2.wasm")
 
 		.then(x => x.arrayBuffer())
 		.then(buf => WebAssembly.compile(buf))
@@ -56,6 +56,7 @@ function App() {
 			HEAP32 = new Int32Array(wasmModule.exports.memory.buffer)
 			HEAPU8 = new Uint8Array(wasmModule.exports.memory.buffer)
 			globalThis.wasmModule = wasmModule;
+			wasmModule.exports.main()
 
 		})
 
