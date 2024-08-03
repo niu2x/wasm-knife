@@ -13,14 +13,11 @@ function App() {
 	let HEAP32
 	let HEAPU8
 
-
-	fetch("http://127.0.0.1:5173/wasm/2/build/w2.wasm")
+	fetch("http://127.0.0.1:5173/wasm/build/w2.wasm")
 
 		.then(x => x.arrayBuffer())
 		.then(buf => WebAssembly.compile(buf))
 		.then((m) => {
-			// globalThis.externalMemory = new WebAssembly.Memory({initial: 128});
-
 			return WebAssembly.instantiate(m, {
 				env: {
 					emscripten_memcpy_big: (dest, src, num) => {
@@ -28,7 +25,14 @@ function App() {
 					},
 					setTempRet0: (...args) => {
 						console.log("setTempRet0", args)
+					},
+					abort: ()=>{
+						console.error("abort")
+					},
+					emscripten_resize_heap: ()=>{
+						console.error("cannot resize heap")
 					}
+
 				},
 				wasi_snapshot_preview1: {
 					fd_write: (fd, iov, iovcnt, pnum) => {
@@ -49,13 +53,10 @@ function App() {
 				}
 			})
 		}).then((wasmModule) => {
-			console.log(wasmModule.exports)
-			HEAP32 = new Int32Array(wasmModule.exports.memory.buffer);
-			HEAPU8 = new Uint8Array(wasmModule.exports.memory.buffer);
-			// let code = wasmModule.exports.main()
-			// console.log(wasmModule)
-			// setCode(code)
+			HEAP32 = new Int32Array(wasmModule.exports.memory.buffer)
+			HEAPU8 = new Uint8Array(wasmModule.exports.memory.buffer)
 			globalThis.wasmModule = wasmModule;
+
 		})
 
 	return React.createElement("p", null, code)

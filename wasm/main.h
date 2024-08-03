@@ -41,8 +41,14 @@ void wasm2c_w2_instantiate(w2c_w2*, struct w2c_env*, struct w2c_wasi__snapshot__
 void wasm2c_w2_free(w2c_w2*);
 wasm_rt_func_type_t wasm2c_w2_get_func_type(uint32_t param_count, uint32_t result_count, ...);
 
+/* import: 'env' 'abort' */
+void w2c_env_abort(struct w2c_env*);
+
 /* import: 'env' 'emscripten_memcpy_big' */
 u32 w2c_env_emscripten_memcpy_big(struct w2c_env*, u32, u32, u32);
+
+/* import: 'env' 'emscripten_resize_heap' */
+u32 w2c_env_emscripten_resize_heap(struct w2c_env*, u32);
 
 /* import: 'env' 'setTempRet0' */
 void w2c_env_setTempRet0(struct w2c_env*, u32);
