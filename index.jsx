@@ -8,7 +8,7 @@ root.render(<App/>)
 function App() {
 	let [code, setCode] = React.useState(0)
 
-	fetch("http://127.0.0.1:5173/wasm/1.wasm")
+	fetch("http://127.0.0.1:5173/wasm/1/1.wasm")
 
 		.then(x => x.arrayBuffer())
 		.then(buf => WebAssembly.compile(buf))
