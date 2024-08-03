@@ -4,15 +4,40 @@ import getopt from 'posix-getopt';
 import {
   promises as fs
 } from "fs";
+
 import {
   WasmLoader
 } from "../src/loader.js"
+
 import {
   WasmHelper
 } from "../src/wasm_helper.js"
 
+
+let usage_text = `\
+Usage: wasm-trim-func [OPTION]... [FILE]
+trim function from wasm
+
+  -c,                        config file, one function name per line
+  -f,                        function name[s], separated by ','
+  -h,                        show help
+  -n,                        dry run
+  -o,                        output file
+  -t,                        output WebAssembly Text
+
+`
+function usage() {
+  console.log(usage_text)
+  process.exit();
+}
+
+let getValidList = (x)=>{
+  return x.map(e => e.trim()).filter(e => e.length > 0)
+}
+
+
 var parser, option;
-parser = new getopt.BasicParser('o:f:c:tn', process.argv);
+parser = new getopt.BasicParser('o:f:c:tnh', process.argv);
 let config = {
   text: false,
   dryRun: false,
@@ -44,6 +69,10 @@ while ((option = parser.getopt()) !== undefined) {
       config.text = true;
       break;
     }
+    case 'h': {
+      usage();
+      break;
+    }
   }
 }
 
@@ -57,12 +86,16 @@ if (optind < process.argv.length) {
     let lines = await fs.readFile(config.config, {
       encoding: "utf-8"
     })
-    lines = lines.split('\n').map(x => x.trim()).filter(x => x.length > 0)
+    lines = getValidList(lines.split('\n'))
     for (let line of lines) {
       wasmHelper.trimFunctionByName(line);
     }
   } else if (config.name) {
-    wasmHelper.trimFunctionByName(config.name);
+
+    for(let n of getValidList(config.name.split(','))) {
+      wasmHelper.trimFunctionByName(n);
+    }
+
   } else {
     console.error("tell me what to trim");
     usage();
@@ -90,8 +123,4 @@ if (optind < process.argv.length) {
       }
     }
   }
-}
-
-function usage() {
-  process.exit();
 }
