@@ -48,4 +48,35 @@ export class WasmHelper {
 		return this.getAllExports().filter(x => x.kind == binaryen.ExternalTag)
 	}
 
+	trimFunctionByName(funcName) {
+		let ref = this.module.getFunction(funcName);
+		if (ref > 0) {
+			let info = binaryen.getFunctionInfo(ref)
+			this.module.removeFunction(funcName)
+			this.module.addFunction(funcName, info.params, info.results, [],
+				this.createReturn(info.results)
+			);
+
+
+		} else {
+			console.warn(`no such func ${funcName}`);
+		}
+	}
+
+	createReturn(type) {
+		return this.module.return(
+			this.createDefaultConst(type)
+		)
+	}
+
+	createDefaultConst(type) {
+		switch (type) {
+			case binaryen.i32: {
+				return this.module.i32.const(0);
+			}
+		}
+
+		throw new Error(`createDefaultConst is unsupported for ${type}`);
+	}
+
 }
