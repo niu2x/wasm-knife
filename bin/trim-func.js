@@ -13,7 +13,6 @@ import {
   WasmHelper
 } from "../src/wasm_helper.js"
 
-
 let usage_text = `\
 Usage: wasm-trim-func [OPTION]... [FILE]
 trim function from wasm
@@ -26,79 +25,106 @@ trim function from wasm
   -t,                        output WebAssembly Text
 
 `
+
 function usage() {
   console.log(usage_text)
   process.exit();
 }
 
-let getValidList = (x)=>{
+let getValidList = (x) => {
   return x.map(e => e.trim()).filter(e => e.length > 0)
 }
 
 
-var parser, option;
-parser = new getopt.BasicParser('o:f:c:tnh', process.argv);
-let config = {
-  text: false,
-  dryRun: false,
+let parseCmdArguments = () => {
+
+  var parser, option;
+  parser = new getopt.BasicParser('o:f:c:tnh', process.argv);
+  let config = {
+    text: false,
+    dryRun: false,
+  }
+
+  while ((option = parser.getopt()) !== undefined) {
+    switch (option.option) {
+      case 'o': {
+        config.output = option.optarg;
+        break;
+      }
+
+      case 'f': {
+        config.name = option.optarg;
+        break;
+      }
+
+      case 'c': {
+        config.config = option.optarg;
+        break;
+      }
+
+      case 'n': {
+        config.dryRun = true;
+        break;
+      }
+
+      case 't': {
+        config.text = true;
+        break;
+      }
+      case 'h': {
+        usage();
+        break;
+      }
+    }
+  }
+
+  return [config, parser.optind()];
 }
 
-while ((option = parser.getopt()) !== undefined) {
-  switch (option.option) {
-    case 'o': {
-      config.output = option.optarg;
-      break;
-    }
+function checkCmdArguments(config, optind) {
+  if (optind >= process.argv.length) {
+    usage();
+  }
 
-    case 'f': {
-      config.name = option.optarg;
-      break;
-    }
+  if (!(config.text || config.output)) {
+    console.error("binary wasm can't print to console.");
+    usage();
+  }
 
-    case 'c': {
-      config.config = option.optarg;
-      break;
-    }
-
-    case 'n': {
-      config.dryRun = true;
-      break;
-    }
-
-    case 't': {
-      config.text = true;
-      break;
-    }
-    case 'h': {
-      usage();
-      break;
-    }
+  if (!(config.config || config.name)) {
+    console.error("tell me what to trim");
+    usage();
   }
 }
 
-let optind = parser.optind();
-if (optind < process.argv.length) {
-  let input = process.argv[optind];
-  let wasmModule = await WasmLoader.loadFromFile(input)
-  let wasmHelper = new WasmHelper(wasmModule);
-
+async function getFuncNamesToTrim(config) {
   if (config.config) {
     let lines = await fs.readFile(config.config, {
       encoding: "utf-8"
     })
     lines = getValidList(lines.split('\n'))
-    for (let line of lines) {
-      wasmHelper.trimFunctionByName(line);
-    }
+    return lines;
+
   } else if (config.name) {
+    return getValidList(config.name.split(','));
+  }
 
-    for(let n of getValidList(config.name.split(','))) {
-      wasmHelper.trimFunctionByName(n);
-    }
+  return []
+}
 
-  } else {
-    console.error("tell me what to trim");
-    usage();
+async function main() {
+  let [config, optind] = parseCmdArguments()
+
+  checkCmdArguments(config, optind)
+
+  let input = process.argv[optind];
+  let wasmModule = await WasmLoader.loadFromFile(input)
+  let wasmHelper = new WasmHelper(wasmModule);
+
+  let funcNames = await getFuncNamesToTrim(config)
+
+  for (let n of funcNames) {
+    wasmHelper.trimFunctionByName(n);
   }
 
   if (!wasmModule.validate())
@@ -117,10 +143,9 @@ if (optind < process.argv.length) {
     } else {
       if (config.text) {
         console.log(wasm)
-      } else {
-        console.error("binary wasm can't print to console.");
-        usage();
       }
     }
   }
 }
+
+main();

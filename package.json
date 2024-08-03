@@ -1,6 +1,6 @@
 {
   "name": "wasm-knife",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -14,7 +14,6 @@
   ],
   "type": "module",
   "bin": {
-    "wasm-ls-func": "bin/ls-func.js",
     "wasm-trim-func": "bin/trim-func.js"
   },
   "author": "niu2x",

@@ -8,5 +8,6 @@ int main() {
   strcpy(c, "hello niu2x");
   printf("%s\n", c);
   delete []c;
+  
   return 0;
 }
