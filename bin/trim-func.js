@@ -170,6 +170,10 @@ async function main() {
       }
     }
   }
+
+  // console.log(wasmModule)
+
+
 }
 
 main();

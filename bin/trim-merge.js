@@ -86,7 +86,7 @@ async function main() {
   	fs.writeFile(config.output, common.join('\n'))
   }
   else {
-	for(let k of common) console.log(k)  	
+	 for(let k of common) console.log(k)  	
   }
 }
 
