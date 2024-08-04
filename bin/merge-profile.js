@@ -1,22 +1,11 @@
 #!/usr/bin/env node
 
-import binaryen from "binaryen"
+import {promises as fs} from "fs";
 import getopt from 'posix-getopt';
-import {
-  promises as fs
-} from "fs";
-
-import {
-  WasmLoader
-} from "../src/loader.js"
-
-import {
-  WasmHelper
-} from "../src/wasm_helper.js"
 
 let usage_text = `\
-Usage: wasm-dump-debug-info [OPTION]... [FILE]
-dump wasm debug info
+Usage: wasm-merge-profile [OPTION]... [FILE]
+merge command lines that is startWith "- "
 
   -o,                        output file
 
@@ -62,22 +51,43 @@ async function main() {
   checkCmdArguments(config, optind)
 
   let input = process.argv[optind];
-  let wasmModule = await WasmLoader.loadFromFile(input)
-  let wasmHelper = new WasmHelper(wasmModule);
-  let funcNames = wasmHelper.getAllFunctionNames();
 
-  let info = {
-    funcNames: funcNames
+  let dict = {
+
   }
 
-  info = JSON.stringify(info, null, 2)
+  let fileCount = 0;
 
-  if (config.output) {
-    await fs.writeFile(config.output, info)
-  } else {
-    console.log(info)
+  for(let i = optind; i < process.argv.length; i ++) {
+  	let lines = await fs.readFile(process.argv[i], {encoding: "utf-8"})
+  	lines = lines.split('\n')
+  	lines = getValidList(lines)
+  	lines = lines.filter(x => x.startsWith('- '))
+  	lines = getValidList(lines)
+  	lines = lines.sort()
+
+  	for(let l of lines) {
+  		dict[l] = dict[l] || 0;
+  		dict[l] += 1;
+  	}
+  	fileCount += 1;
   }
 
+  let common = []
+
+  for(let k in dict) {
+  	let count = dict[k]
+  	if(count == fileCount) {
+  		common.push(k)
+  	}
+  }
+
+  if(config.output) {
+  	fs.writeFile(config.output, common.join('\n'))
+  }
+  else {
+	for(let k of common) console.log(k)  	
+  }
 }
 
 main();

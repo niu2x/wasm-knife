@@ -15,6 +15,7 @@
   "type": "module",
   "bin": {
     "wasm-trim-func": "bin/trim-func.js",
+    "wasm-merge-profile": "bin/merge-profile.js",
     "wasm-dump-debug-info": "bin/dump-debug-info.js"
   },
   "author": "niu2x",
