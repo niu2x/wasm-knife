@@ -18,8 +18,15 @@ let usage_text = `\
 Usage: wasm-trim-func [OPTION]... [FILE]
 trim function from wasm
 
-  -c,                        config file, one function name per line
-  -d,                        output wasm with debug info
+  -c,                        config file, one function name per line, start with '- '
+                             eg:
+                               - main
+                               - funcNameA
+                               - funcNameB
+                               - all_those_will_be_trim
+                               + this_is_ignored
+
+  -g,                        output wasm with debug info
   -f,                        function name[s], separated by ','
   -h,                        show help
   -n,                        dry run
@@ -41,7 +48,7 @@ let getValidList = (x) => {
 let parseCmdArguments = () => {
 
   var parser, option;
-  parser = new getopt.BasicParser('o:f:c:tnhd', process.argv);
+  parser = new getopt.BasicParser('o:f:c:tnhg', process.argv);
   let config = {
     text: false,
     dryRun: false,
@@ -55,7 +62,7 @@ let parseCmdArguments = () => {
         break;
       }
 
-      case 'd': {
+      case 'g': {
         config.debug = true;
         break;
       }
@@ -113,6 +120,11 @@ async function getFuncNamesToTrim(config) {
       encoding: "utf-8"
     })
     lines = getValidList(lines.split('\n'))
+
+
+    lines = lines.filter(x=>x.startsWith('- '))
+    lines = lines.map(x=>x.split(' ')[1])
+    lines = getValidList(lines)
     return lines;
 
   } else if (config.name) {
