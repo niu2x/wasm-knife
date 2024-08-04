@@ -4,7 +4,7 @@ import {promises as fs} from "fs";
 import getopt from 'posix-getopt';
 
 let usage_text = `\
-Usage: wasm-merge-profile [OPTION]... [FILE]
+Usage: wasm-trim-merge [OPTION]... [FILE]
 merge command lines that is startWith "- "
 
   -o,                        output file
