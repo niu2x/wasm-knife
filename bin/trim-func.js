@@ -113,6 +113,11 @@ async function getFuncNamesToTrim(config) {
       encoding: "utf-8"
     })
     lines = getValidList(lines.split('\n'))
+
+
+    lines = lines.filter(x=>x.startsWith('- '))
+    lines = lines.map(x=>x.split(' ')[1])
+    lines = getValidList(lines)
     return lines;
 
   } else if (config.name) {

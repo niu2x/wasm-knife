@@ -53,10 +53,16 @@ export class WasmHelper {
 		if (ref > 0) {
 			let info = binaryen.getFunctionInfo(ref)
 			this.module.removeFunction(funcName)
-			this.module.addFunction(funcName, info.params, info.results, [],
-				this.createReturn(info.results)
-			);
 
+			if (info.results != binaryen.none) {
+				this.module.addFunction(funcName, info.params, info.results, [],
+					this.createReturn(info.results)
+				);
+			} else {
+				this.module.addFunction(funcName, info.params, info.results, [],
+					this.module.return()
+				);
+			}
 
 		} else {
 			console.warn(`no such func ${funcName}`);
@@ -73,6 +79,15 @@ export class WasmHelper {
 		switch (type) {
 			case binaryen.i32: {
 				return this.module.i32.const(0);
+			}
+			case binaryen.f32: {
+				return this.module.f32.const(0);
+			}
+			case binaryen.i64: {
+				return this.module.i64.const(0);
+			}
+			case binaryen.f64: {
+				return this.module.f64.const(0);
 			}
 		}
 

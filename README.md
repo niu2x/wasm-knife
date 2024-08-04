@@ -14,3 +14,5 @@
 
 Example:
 	wasm-trim-func -f main -t wasm/w2.wasm
+
+
