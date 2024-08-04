@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import binaryen from "binaryen"
 import getopt from 'posix-getopt';
 import {
   promises as fs
@@ -18,6 +19,7 @@ Usage: wasm-trim-func [OPTION]... [FILE]
 trim function from wasm
 
   -c,                        config file, one function name per line
+  -d,                        output wasm with debug info
   -f,                        function name[s], separated by ','
   -h,                        show help
   -n,                        dry run
@@ -39,16 +41,22 @@ let getValidList = (x) => {
 let parseCmdArguments = () => {
 
   var parser, option;
-  parser = new getopt.BasicParser('o:f:c:tnh', process.argv);
+  parser = new getopt.BasicParser('o:f:c:tnhd', process.argv);
   let config = {
     text: false,
     dryRun: false,
+    debug: false,
   }
 
   while ((option = parser.getopt()) !== undefined) {
     switch (option.option) {
-      case 'o': {
-        config.output = option.optarg;
+      case 'c': {
+        config.config = option.optarg;
+        break;
+      }
+
+      case 'd': {
+        config.debug = true;
         break;
       }
 
@@ -57,8 +65,8 @@ let parseCmdArguments = () => {
         break;
       }
 
-      case 'c': {
-        config.config = option.optarg;
+      case 'h': {
+        usage();
         break;
       }
 
@@ -67,14 +75,16 @@ let parseCmdArguments = () => {
         break;
       }
 
+      case 'o': {
+        config.output = option.optarg;
+        break;
+      }
+
       case 't': {
         config.text = true;
         break;
       }
-      case 'h': {
-        usage();
-        break;
-      }
+
     }
   }
 
@@ -129,6 +139,8 @@ async function main() {
 
   if (!wasmModule.validate())
     throw new Error("validation error");
+
+  binaryen.setDebugInfo(config.debug)
 
   let wasm;
   if (config.text) {

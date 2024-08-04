@@ -5,6 +5,7 @@
 	Usage: wasm-trim-func [OPTION]... [FILE]
 	trim function from wasm
 	  -c,                        config file, one function name per line
+	  -d,                        output wasm with debug info
 	  -f,                        function name[s], separated by ','
 	  -h,                        show help
 	  -n,                        dry run
