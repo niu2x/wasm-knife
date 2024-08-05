@@ -2,6 +2,8 @@
 #include <binaryen-c.h>
 #include <iostream>
 #include <memory>
+#include <algorithm>
+#include <iterator>
 #include <fstream>
 #include <vector>
 
@@ -9,6 +11,7 @@ static void usage(const char* program_name) { std::cerr << "Usage" << std::endl;
 
 struct Config {
     std::string output;
+    bool text;
 };
 
 class Module {
@@ -55,9 +58,17 @@ public:
     Module(const Module&) = delete;
     Module& operator=(const Module&) = delete;
 
-    std::vector<char> emit_binary()
-    {
+    using Emitter = size_t (*)(BinaryenModuleRef, char*, size_t);
 
+    std::vector<char> emit_binary() const { return emit(BinaryenModuleWrite); }
+
+    std::vector<char> emit_text() const { return emit(BinaryenModuleWriteText); }
+
+private:
+    BinaryenModuleRef native_;
+
+    std::vector<char> emit(Emitter emitter) const
+    {
         const size_t init_buf_size = 1024;
         std::vector<char> buf(init_buf_size);
 
@@ -65,24 +76,27 @@ public:
 
         while (writen_size == buf.size()) {
             buf.resize(buf.size() << 1);
-            writen_size = BinaryenModuleWrite(native_, (char*)buf.data(), buf.size());
+            writen_size = emitter(native_, (char*)buf.data(), buf.size());
         }
         buf.resize(writen_size);
 
         return buf;
     }
-
-private:
-    BinaryenModuleRef native_;
 };
 
 int main(int argc, char* argv[])
 {
-    Config config;
+    Config config = {
+        .output = "",
+        .text = false,
+    };
 
     int opt;
-    while ((opt = getopt(argc, argv, "o:")) != -1) {
+    while ((opt = getopt(argc, argv, "o:t")) != -1) {
         switch (opt) {
+            case 't':
+                config.text = true;
+                break;
             case 'o':
                 config.output = optarg;
                 break;
@@ -104,15 +118,26 @@ int main(int argc, char* argv[])
         std::cerr << "parse_binary fail" << std::endl;
     }
 
-    auto wasm_binary = module->emit_binary();
+    if (config.text) {
+        auto wasm_text = module->emit_text();
 
-    if (config.output != "") {
-        std::ofstream file(config.output, std::ios::binary);
-        if (file) {
-            file.write(wasm_binary.data(), wasm_binary.size());
+        if (config.output != "") {
+
+        } else {
+            std::copy(wasm_text.begin(), wasm_text.end(), std::ostream_iterator<char>(std::cout));
         }
-        file.close();
-    }
 
+    } else {
+
+        if (config.output != "") {
+
+            auto wasm_binary = module->emit_binary();
+            std::ofstream file(config.output, std::ios::binary);
+            if (file) {
+                file.write(wasm_binary.data(), wasm_binary.size());
+            }
+            file.close();
+        }
+    }
     return 0;
 }
