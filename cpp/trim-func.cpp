@@ -8,6 +8,7 @@
 static void usage(const char* program_name) { std::cerr << "Usage" << std::endl; }
 
 struct Config {
+    std::string output;
 };
 
 class Module {
@@ -54,9 +55,21 @@ public:
     Module(const Module&) = delete;
     Module& operator=(const Module&) = delete;
 
+    std::vector<char> emit_binary()
+    {
 
-    std::vector<uint8_t> emit_binary() {
-        
+        const size_t init_buf_size = 1024;
+        std::vector<char> buf(init_buf_size);
+
+        size_t writen_size = init_buf_size;
+
+        while (writen_size == buf.size()) {
+            buf.resize(buf.size() << 1);
+            writen_size = BinaryenModuleWrite(native_, (char*)buf.data(), buf.size());
+        }
+        buf.resize(writen_size);
+
+        return buf;
     }
 
 private:
@@ -65,10 +78,13 @@ private:
 
 int main(int argc, char* argv[])
 {
+    Config config;
+
     int opt;
-    while ((opt = getopt(argc, argv, "nt:")) != -1) {
+    while ((opt = getopt(argc, argv, "o:")) != -1) {
         switch (opt) {
-            case 't':
+            case 'o':
+                config.output = optarg;
                 break;
             default: /* '?' */
                 usage(argv[0]);
@@ -88,7 +104,15 @@ int main(int argc, char* argv[])
         std::cerr << "parse_binary fail" << std::endl;
     }
 
+    auto wasm_binary = module->emit_binary();
 
+    if (config.output != "") {
+        std::ofstream file(config.output, std::ios::binary);
+        if (file) {
+            file.write(wasm_binary.data(), wasm_binary.size());
+        }
+        file.close();
+    }
 
     return 0;
 }
