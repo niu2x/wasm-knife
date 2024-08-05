@@ -11,6 +11,7 @@ static void usage(const char* program_name) { std::cerr << "Usage" << std::endl;
 
 struct Config {
     std::string output;
+    std::string func_names;
     bool text;
 };
 
@@ -84,22 +85,43 @@ private:
     }
 };
 
+std::vector<std::string> split(const std::string& str, const std::string& delim)
+{
+    std::vector<std::string> result;
+    size_t start = 0;
+
+    for (size_t found = str.find(delim); found != std::string::npos;
+         found = str.find(delim, start)) {
+        result.emplace_back(str.begin() + start, str.begin() + found);
+        start = found + delim.size();
+    }
+    if (start != str.size())
+        result.emplace_back(str.begin() + start, str.end());
+    return result;
+}
+
 int main(int argc, char* argv[])
 {
     Config config = {
         .output = "",
+        .func_names = "",
         .text = false,
     };
 
     int opt;
-    while ((opt = getopt(argc, argv, "o:t")) != -1) {
+    while ((opt = getopt(argc, argv, "f:o:t")) != -1) {
         switch (opt) {
-            case 't':
-                config.text = true;
+            case 'f':
+                config.func_names = optarg;
                 break;
             case 'o':
                 config.output = optarg;
                 break;
+
+            case 't':
+                config.text = true;
+                break;
+
             default: /* '?' */
                 usage(argv[0]);
                 exit(EXIT_FAILURE);
@@ -130,7 +152,6 @@ int main(int argc, char* argv[])
     } else {
 
         if (config.output != "") {
-
             auto wasm_binary = module->emit_binary();
             std::ofstream file(config.output, std::ios::binary);
             if (file) {
