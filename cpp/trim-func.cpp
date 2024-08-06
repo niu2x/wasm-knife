@@ -2,8 +2,10 @@
 #include <binaryen-c.h>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <algorithm>
 #include <iterator>
+#include <map>
 #include <fstream>
 #include <vector>
 #include <stdexcept>
@@ -16,6 +18,94 @@ struct Config {
     std::string config;
     bool text;
     bool debug;
+};
+
+class BinaryenExprWalker {
+public:
+    class Listener {
+    public:
+#define ENTER_EXIT(x)                                                          \
+    virtual void enter_##x(BinaryenExpressionRef) { }                          \
+    virtual void exit_##x(BinaryenExpressionRef) { }
+
+        ENTER_EXIT(block);
+        ENTER_EXIT(return );
+        ENTER_EXIT(const);
+        ENTER_EXIT(call_indirect);
+        ENTER_EXIT(call);
+    };
+
+    BinaryenExprWalker() { }
+    ~BinaryenExprWalker() { }
+
+    void walk(BinaryenExpressionRef expr, Listener* listener)
+    {
+        do_walk(expr, listener);
+    }
+
+private:
+    void do_walk(BinaryenExpressionRef expr, Listener* listener)
+    {
+
+#define DELEGATE(CLASS_TO_VISIT)                                               \
+    static BinaryenExpressionId CLASS_TO_VISIT##_ID                            \
+        = Binaryen##CLASS_TO_VISIT##Id();
+#include "wasm-delegations.def"
+
+        auto id = BinaryenExpressionGetId(expr);
+
+        if (false /*id == Nop_ID */) {
+
+        } else if (id == Block_ID) {
+            listener->enter_block(expr);
+
+            auto children_num = BinaryenBlockGetNumChildren(expr);
+            for (BinaryenIndex i = 0; i < children_num; i++) {
+                do_walk(BinaryenBlockGetChildAt(expr, i), listener);
+            }
+            listener->exit_block(expr);
+        } else if (id == Call_ID) {
+            listener->enter_call(expr);
+
+            auto children_num = BinaryenCallGetNumOperands(expr);
+            for (BinaryenIndex i = 0; i < children_num; i++) {
+                do_walk(BinaryenCallGetOperandAt(expr, i), listener);
+            }
+
+            listener->exit_call(expr);
+        }
+
+        else if (id == Const_ID) {
+            listener->enter_const(expr);
+            listener->exit_const(expr);
+        }
+
+        else if (id == CallIndirect_ID) {
+            listener->enter_call_indirect(expr);
+
+            auto children_num = BinaryenCallIndirectGetNumOperands(expr);
+            for (BinaryenIndex i = 0; i < children_num; i++) {
+                do_walk(BinaryenCallIndirectGetOperandAt(expr, i), listener);
+            }
+
+            listener->exit_call_indirect(expr);
+        }
+
+        else if (id == Return_ID) {
+            listener->enter_return(expr);
+
+            if (auto r = BinaryenReturnGetValue(expr)) {
+                do_walk(r, listener);
+            }
+
+            listener->exit_return(expr);
+        }
+
+        else {
+            throw std::runtime_error(
+                "unsupport expr id: " + std::to_string(id));
+        }
+    }
 };
 
 class Module {
@@ -50,6 +140,7 @@ public:
     Module(BinaryenModuleRef r)
     : native_(r)
     {
+        fetch_exports();
     }
 
     ~Module()
@@ -78,22 +169,105 @@ public:
 
     void trim_func(const char* name)
     {
+
         auto func = BinaryenGetFunction(native_, name);
         if (func) {
             std::clog << "trim " << name << std::endl;
             auto params_type = BinaryenFunctionGetParams(func);
             auto results_type = BinaryenFunctionGetResults(func);
             BinaryenRemoveFunction(native_, name);
-            BinaryenAddFunction(
-                native_,
-                name,
-                params_type,
-                results_type,
-                nullptr,
-                0,
-                ir_default_return_expr(results_type));
+
+            if (is_export_func(name)) {
+                add_empty_func(name, params_type, results_type);
+            } else {
+                auto placeholder_name
+                    = get_placeholder_func_name(params_type, results_type);
+                add_empty_func(
+                    placeholder_name.c_str(),
+                    params_type,
+                    results_type);
+
+                names_transform_[name] = placeholder_name;
+            }
         } else {
             std::clog << "no " << name << std::endl;
+        }
+    }
+
+    void replace_call()
+    {
+        auto func_num = BinaryenGetNumFunctions(native_);
+        for (BinaryenIndex i = 0; i < func_num; i++) {
+            auto func = BinaryenGetFunctionByIndex(native_, i);
+            auto body = BinaryenFunctionGetBody(func);
+            auto new_body = replace_body(body);
+            if (new_body) {
+                BinaryenFunctionSetBody(func, new_body);
+            }
+        }
+    }
+
+    void replace_elem()
+    {
+
+        struct Segment {
+            std::vector<std::string> data;
+            std::string name;
+            std::string table;
+        };
+
+        using SegmentArray = std::vector<Segment>;
+
+        SegmentArray segments;
+
+        auto segment_num = BinaryenGetNumElementSegments(native_);
+        for (BinaryenIndex i = 0; i < segment_num; i++) {
+            Segment segment;
+            auto seg_ref = BinaryenGetElementSegmentByIndex(native_, i);
+            auto len = BinaryenElementSegmentGetLength(seg_ref);
+            segment.name = BinaryenElementSegmentGetName(seg_ref);
+
+            segment.table = BinaryenElementSegmentGetTable(seg_ref);
+            auto is_passive = BinaryenElementSegmentIsPassive(seg_ref);
+            if (is_passive)
+                throw std::runtime_error("unsupport passive segment");
+
+            for (BinaryenIndex k = 0; k < len; k++) {
+                std::string n = BinaryenElementSegmentGetData(seg_ref, k);
+
+                auto it = names_transform_.find(n);
+                if (it != names_transform_.end()) {
+                    n = it->second;
+                }
+
+                segment.data.push_back(std::move(n));
+            }
+
+            segments.push_back(std::move(segment));
+        }
+
+        for (auto& seg : segments) {
+            BinaryenRemoveElementSegment(native_, seg.name.c_str());
+        }
+
+        for (auto& seg : segments) {
+
+            std::vector<const char*> func_names;
+            func_names.resize(seg.data.size());
+
+            std::transform(
+                seg.data.begin(),
+                seg.data.end(),
+                func_names.begin(),
+                [](auto& x) { return x.c_str(); });
+
+            BinaryenAddActiveElementSegment(
+                native_,
+                seg.table.c_str(),
+                seg.name.c_str(),
+                func_names.data(),
+                func_names.size(),
+                ir_const(BinaryenTypeInt32(), 0));
         }
     }
 
@@ -101,6 +275,47 @@ public:
 
 private:
     BinaryenModuleRef native_;
+
+    std::string
+    get_placeholder_func_name(BinaryenType params, BinaryenType results)
+    {
+        std::stringstream ss;
+        ss << "_wasm_knife_placeholder_" << params << "_" << results;
+        return ss.str();
+    }
+
+    void
+    add_empty_func(const char* name, BinaryenType params, BinaryenType results)
+    {
+
+        if (BinaryenGetFunction(native_, name))
+            return;
+
+        BinaryenAddFunction(
+            native_,
+            name,
+            params,
+            results,
+            nullptr,
+            0,
+            ir_default_return_expr(results));
+    }
+
+    bool is_export_func(const char* name) const
+    {
+        return exported_internal_names_.find(name)
+            != exported_internal_names_.end();
+    }
+
+    void fetch_exports()
+    {
+        BinaryenIndex len = BinaryenGetNumExports(native_);
+        for (BinaryenIndex i = 0; i < len; i++) {
+            auto ref = BinaryenGetExportByIndex(native_, i);
+            auto name = BinaryenExportGetValue(ref);
+            exported_internal_names_[name] = true;
+        }
+    }
 
     std::vector<char> emit(size_t guess_size, Emitter emitter) const
     {
@@ -156,6 +371,40 @@ private:
         } else {
             throw std::runtime_error("unsupport type " + std::to_string(type));
         }
+    }
+
+    using NameTransform = std::map<std::string, std::string>;
+    NameTransform names_transform_;
+    std::map<std::string, bool> exported_internal_names_;
+
+    class ReplaceCallListner : public BinaryenExprWalker::Listener {
+    public:
+        ReplaceCallListner(const NameTransform* t)
+        : names_transform_(t)
+        {
+        }
+        virtual ~ReplaceCallListner() { }
+
+        void enter_call(BinaryenExpressionRef ref) override
+        {
+            auto target = BinaryenCallGetTarget(ref);
+            auto it = names_transform_->find(target);
+            if (it != names_transform_->end()) {
+                BinaryenCallSetTarget(ref, it->second.c_str());
+            }
+        }
+
+    private:
+        const NameTransform* names_transform_;
+    };
+
+    BinaryenExpressionRef replace_body(BinaryenExpressionRef old_body)
+    {
+        BinaryenExprWalker walker;
+        ReplaceCallListner listener(&names_transform_);
+        walker.walk(old_body, &listener);
+        // return ir_return_expr(nullptr);
+        return nullptr;
     }
 };
 
@@ -267,6 +516,12 @@ int main(int argc, char* argv[])
             module->trim_func(x.c_str());
         }
     }
+
+    std::clog << "replace_elem" << std::endl;
+    module->replace_elem();
+
+    std::clog << "replace_call" << std::endl;
+    module->replace_call();
 
     std::clog << "validate" << std::endl;
     if (!module->validate()) {
