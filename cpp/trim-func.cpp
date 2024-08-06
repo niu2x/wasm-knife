@@ -67,8 +67,10 @@ public:
         return emit(guess_size, BinaryenModuleWrite);
     }
 
-    std::vector<char> emit_text(size_t guess_size = 1024) const
+    std::vector<char>
+    emit_text(bool colors_enabled, size_t guess_size = 1024) const
     {
+        BinaryenSetColorsEnabled(colors_enabled);
         return emit(guess_size, BinaryenModuleWriteText);
     }
 
@@ -227,16 +229,20 @@ int main(int argc, char* argv[])
 
     std::clog << "emit" << std::endl;
     if (config.text) {
-        auto wasm_text = module->emit_text(1 << 30);
-
         if (config.output != "") {
+            auto wasm_text = module->emit_text(false, 1 << 30);
+            std::ofstream file(config.output, std::ios::binary);
+            if (file) {
+                file.write(wasm_text.data(), wasm_text.size());
+            }
+            file.close();
 
         } else {
+            auto wasm_text = module->emit_text(true, 1 << 30);
             std::copy(wasm_text.begin(), wasm_text.end(), std::ostream_iterator<char>(std::cout));
         }
 
     } else {
-
         if (config.output != "") {
             auto wasm_binary = module->emit_binary(1 << 30);
             std::ofstream file(config.output, std::ios::binary);
