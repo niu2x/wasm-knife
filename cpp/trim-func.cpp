@@ -106,6 +106,25 @@ public:
         }
     }
 
+    void replace_call()
+    {
+        auto func_num = BinaryenGetNumFunctions(native_);
+        for (BinaryenIndex i = 0; i < func_num; i++) {
+            auto func = BinaryenGetFunctionByIndex(native_, i);
+            auto body = BinaryenFunctionGetBody(func);
+            auto new_body = replace_body(body);
+            if (new_body) {
+                BinaryenFunctionSetBody(func, new_body);
+            }
+        }
+    }
+
+    BinaryenExpressionRef replace_body(BinaryenExpressionRef old_body)
+    {
+        // return ir_return_expr(nullptr);
+        return nullptr;
+    }
+
     void replace_elem()
     {
 
@@ -387,6 +406,9 @@ int main(int argc, char* argv[])
 
     std::clog << "replace_elem" << std::endl;
     module->replace_elem();
+
+    std::clog << "replace_call" << std::endl;
+    module->replace_call();
 
     std::clog << "validate" << std::endl;
     if (!module->validate()) {
