@@ -62,9 +62,15 @@ public:
 
     using Emitter = size_t (*)(BinaryenModuleRef, char*, size_t);
 
-    std::vector<char> emit_binary() const { return emit(BinaryenModuleWrite); }
+    std::vector<char> emit_binary(size_t guess_size = 1024) const
+    {
+        return emit(guess_size, BinaryenModuleWrite);
+    }
 
-    std::vector<char> emit_text() const { return emit(BinaryenModuleWriteText); }
+    std::vector<char> emit_text(size_t guess_size = 1024) const
+    {
+        return emit(guess_size, BinaryenModuleWriteText);
+    }
 
     void trim_func(const char* name)
     {
@@ -89,9 +95,9 @@ public:
 private:
     BinaryenModuleRef native_;
 
-    std::vector<char> emit(Emitter emitter) const
+    std::vector<char> emit(size_t guess_size, Emitter emitter) const
     {
-        const size_t init_buf_size = 1024;
+        const size_t init_buf_size = guess_size >> 1;
         std::vector<char> buf(init_buf_size);
 
         size_t writen_size = init_buf_size;
@@ -196,12 +202,14 @@ int main(int argc, char* argv[])
 
     auto wasm_path = argv[optind];
 
+    std::clog << "parse binary" << std::endl;
     auto module = Module::parse_binary(wasm_path);
     if (!module) {
         std::cerr << "parse_binary fail" << std::endl;
         return EXIT_FAILURE;
     }
 
+    std::clog << "trim func" << std::endl;
     if (config.func_names != "") {
 
         auto func_names = split(config.func_names, ",");
@@ -211,13 +219,15 @@ int main(int argc, char* argv[])
         }
     }
 
+    std::clog << "validate" << std::endl;
     if (!module->validate()) {
         std::cerr << "module validate fail" << std::endl;
         return EXIT_FAILURE;
     }
 
+    std::clog << "emit" << std::endl;
     if (config.text) {
-        auto wasm_text = module->emit_text();
+        auto wasm_text = module->emit_text(1 << 30);
 
         if (config.output != "") {
 
@@ -228,7 +238,7 @@ int main(int argc, char* argv[])
     } else {
 
         if (config.output != "") {
-            auto wasm_binary = module->emit_binary();
+            auto wasm_binary = module->emit_binary(1 << 30);
             std::ofstream file(config.output, std::ios::binary);
             if (file) {
                 file.write(wasm_binary.data(), wasm_binary.size());
