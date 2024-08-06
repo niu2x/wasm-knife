@@ -5,6 +5,7 @@
 #include <sstream>
 #include <algorithm>
 #include <iterator>
+#include <map>
 #include <fstream>
 #include <vector>
 #include <stdexcept>
@@ -51,6 +52,7 @@ public:
     Module(BinaryenModuleRef r)
     : native_(r)
     {
+        fetch_exports();
     }
 
     ~Module()
@@ -79,6 +81,12 @@ public:
 
     void trim_func(const char* name)
     {
+
+        if (is_export_func(name)) {
+            std::clog << "cannot trim exported " << name << std::endl;
+            return;
+        }
+
         auto func = BinaryenGetFunction(native_, name);
         if (func) {
             std::clog << "trim " << name << std::endl;
@@ -90,9 +98,74 @@ public:
                 = get_placeholder_func_name(params_type, results_type);
             add_empty_func(placeholder_name.c_str(), params_type, results_type);
 
-            replace_elem(name, placeholder_name.c_str());
+            names_transform_[name] = placeholder_name;
+
         } else {
             std::clog << "no " << name << std::endl;
+        }
+    }
+
+    void replace_elem()
+    {
+
+        struct Segment {
+            std::vector<std::string> data;
+            std::string name;
+            std::string table;
+        };
+
+        using SegmentArray = std::vector<Segment>;
+
+        SegmentArray segments;
+
+        auto segment_num = BinaryenGetNumElementSegments(native_);
+        for (BinaryenIndex i = 0; i < segment_num; i++) {
+            Segment segment;
+            auto seg_ref = BinaryenGetElementSegmentByIndex(native_, i);
+            auto len = BinaryenElementSegmentGetLength(seg_ref);
+            segment.name = BinaryenElementSegmentGetName(seg_ref);
+
+            segment.table = BinaryenElementSegmentGetTable(seg_ref);
+            auto is_passive = BinaryenElementSegmentIsPassive(seg_ref);
+            if (is_passive)
+                throw std::runtime_error("unsupport passive segment");
+
+            for (BinaryenIndex k = 0; k < len; k++) {
+                std::string n = BinaryenElementSegmentGetData(seg_ref, k);
+
+                auto it = names_transform_.find(n);
+                if (it != names_transform_.end()) {
+                    n = it->second;
+                }
+
+                segment.data.push_back(std::move(n));
+            }
+
+            segments.push_back(std::move(segment));
+        }
+
+        for (auto& seg : segments) {
+            BinaryenRemoveElementSegment(native_, seg.name.c_str());
+        }
+
+        for (auto& seg : segments) {
+
+            std::vector<const char*> func_names;
+            func_names.resize(seg.data.size());
+
+            std::transform(
+                seg.data.begin(),
+                seg.data.end(),
+                func_names.begin(),
+                [](auto& x) { return x.c_str(); });
+
+            BinaryenAddActiveElementSegment(
+                native_,
+                seg.table.c_str(),
+                seg.name.c_str(),
+                func_names.data(),
+                func_names.size(),
+                ir_const(BinaryenTypeInt32(), 0));
         }
     }
 
@@ -124,6 +197,22 @@ private:
             nullptr,
             0,
             ir_default_return_expr(results));
+    }
+
+    bool is_export_func(const char* name) const
+    {
+        return exported_internal_names_.find(name)
+            != exported_internal_names_.end();
+    }
+
+    void fetch_exports()
+    {
+        BinaryenIndex len = BinaryenGetNumExports(native_);
+        for (BinaryenIndex i = 0; i < len; i++) {
+            auto ref = BinaryenGetExportByIndex(native_, i);
+            auto name = BinaryenExportGetValue(ref);
+            exported_internal_names_[name] = true;
+        }
     }
 
     std::vector<char> emit(size_t guess_size, Emitter emitter) const
@@ -182,68 +271,8 @@ private:
         }
     }
 
-    void replace_elem(const char* old_name, const char* new_name)
-    {
-
-        struct Segment {
-            std::vector<std::string> data;
-            std::string name;
-            std::string table;
-        };
-
-        using SegmentArray = std::vector<Segment>;
-
-        SegmentArray segments;
-
-        auto segment_num = BinaryenGetNumElementSegments(native_);
-        for (BinaryenIndex i = 0; i < segment_num; i++) {
-            Segment segment;
-            auto seg_ref = BinaryenGetElementSegmentByIndex(native_, i);
-            auto len = BinaryenElementSegmentGetLength(seg_ref);
-            segment.name = BinaryenElementSegmentGetName(seg_ref);
-
-            segment.table = BinaryenElementSegmentGetTable(seg_ref);
-            auto is_passive = BinaryenElementSegmentIsPassive(seg_ref);
-            if (is_passive)
-                throw std::runtime_error("unsupport passive segment");
-
-            for (BinaryenIndex k = 0; k < len; k++) {
-                std::string n = BinaryenElementSegmentGetData(seg_ref, k);
-
-                if (n == old_name) {
-                    n = new_name;
-                }
-
-                segment.data.push_back(std::move(n));
-            }
-
-            segments.push_back(std::move(segment));
-        }
-
-        for (auto& seg : segments) {
-            BinaryenRemoveElementSegment(native_, seg.name.c_str());
-        }
-
-        for (auto& seg : segments) {
-
-            std::vector<const char*> func_names;
-            func_names.resize(seg.data.size());
-
-            std::transform(
-                seg.data.begin(),
-                seg.data.end(),
-                func_names.begin(),
-                [](auto& x) { return x.c_str(); });
-
-            BinaryenAddActiveElementSegment(
-                native_,
-                seg.table.c_str(),
-                seg.name.c_str(),
-                func_names.data(),
-                func_names.size(),
-                ir_const(BinaryenTypeInt32(), 0));
-        }
-    }
+    std::map<std::string, std::string> names_transform_;
+    std::map<std::string, bool> exported_internal_names_;
 };
 
 std::vector<std::string> split(const std::string& str, const std::string& delim)
@@ -354,6 +383,9 @@ int main(int argc, char* argv[])
             module->trim_func(x.c_str());
         }
     }
+
+    std::clog << "replace_elem" << std::endl;
+    module->replace_elem();
 
     std::clog << "validate" << std::endl;
     if (!module->validate()) {
