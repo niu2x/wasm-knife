@@ -20,6 +20,94 @@ struct Config {
     bool debug;
 };
 
+class BinaryenExprWalker {
+public:
+    class Listener {
+    public:
+#define ENTER_EXIT(x)                                                          \
+    virtual void enter_##x(BinaryenExpressionRef) { }                          \
+    virtual void exit_##x(BinaryenExpressionRef) { }
+
+        ENTER_EXIT(block);
+        ENTER_EXIT(return );
+        ENTER_EXIT(const);
+        ENTER_EXIT(call_indirect);
+        ENTER_EXIT(call);
+    };
+
+    BinaryenExprWalker() { }
+    ~BinaryenExprWalker() { }
+
+    void walk(BinaryenExpressionRef expr, Listener* listener)
+    {
+        do_walk(expr, listener);
+    }
+
+private:
+    void do_walk(BinaryenExpressionRef expr, Listener* listener)
+    {
+
+#define DELEGATE(CLASS_TO_VISIT)                                               \
+    static BinaryenExpressionId CLASS_TO_VISIT##_ID                            \
+        = Binaryen##CLASS_TO_VISIT##Id();
+#include "wasm-delegations.def"
+
+        auto id = BinaryenExpressionGetId(expr);
+
+        if (false /*id == Nop_ID */) {
+
+        } else if (id == Block_ID) {
+            listener->enter_block(expr);
+
+            auto children_num = BinaryenBlockGetNumChildren(expr);
+            for (BinaryenIndex i = 0; i < children_num; i++) {
+                do_walk(BinaryenBlockGetChildAt(expr, i), listener);
+            }
+            listener->exit_block(expr);
+        } else if (id == Call_ID) {
+            listener->enter_call(expr);
+
+            auto children_num = BinaryenCallGetNumOperands(expr);
+            for (BinaryenIndex i = 0; i < children_num; i++) {
+                do_walk(BinaryenCallGetOperandAt(expr, i), listener);
+            }
+
+            listener->exit_call(expr);
+        }
+
+        else if (id == Const_ID) {
+            listener->enter_const(expr);
+            listener->exit_const(expr);
+        }
+
+        else if (id == CallIndirect_ID) {
+            listener->enter_call_indirect(expr);
+
+            auto children_num = BinaryenCallIndirectGetNumOperands(expr);
+            for (BinaryenIndex i = 0; i < children_num; i++) {
+                do_walk(BinaryenCallIndirectGetOperandAt(expr, i), listener);
+            }
+
+            listener->exit_call_indirect(expr);
+        }
+
+        else if (id == Return_ID) {
+            listener->enter_return(expr);
+
+            if (auto r = BinaryenReturnGetValue(expr)) {
+                do_walk(r, listener);
+            }
+
+            listener->exit_return(expr);
+        }
+
+        else {
+            throw std::runtime_error(
+                "unsupport expr id: " + std::to_string(id));
+        }
+    }
+};
+
 class Module {
 public:
     static std::unique_ptr<Module> parse_binary(const char* wasm_path)
@@ -121,6 +209,9 @@ public:
 
     BinaryenExpressionRef replace_body(BinaryenExpressionRef old_body)
     {
+        BinaryenExprWalker walker;
+        BinaryenExprWalker::Listener listener;
+        walker.walk(old_body, &listener);
         // return ir_return_expr(nullptr);
         return nullptr;
     }
