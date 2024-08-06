@@ -2,6 +2,7 @@
 #include <binaryen-c.h>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <algorithm>
 #include <iterator>
 #include <fstream>
@@ -81,14 +82,12 @@ public:
             auto params_type = BinaryenFunctionGetParams(func);
             auto results_type = BinaryenFunctionGetResults(func);
             BinaryenRemoveFunction(native_, name);
-            BinaryenAddFunction(
-                native_,
-                name,
-                params_type,
-                results_type,
-                nullptr,
-                0,
-                ir_default_return_expr(results_type));
+
+            auto placeholder_name
+                = get_placeholder_func_name(params_type, results_type);
+            add_empty_func(placeholder_name.c_str(), params_type, results_type);
+
+            replace_elem(name, placeholder_name.c_str());
         }
     }
 
@@ -96,6 +95,31 @@ public:
 
 private:
     BinaryenModuleRef native_;
+
+    std::string
+    get_placeholder_func_name(BinaryenType params, BinaryenType results)
+    {
+        std::stringstream ss;
+        ss << "_wasm_knife_placeholder_" << params << "_" << results;
+        return ss.str();
+    }
+
+    void
+    add_empty_func(const char* name, BinaryenType params, BinaryenType results)
+    {
+
+        if (BinaryenGetFunction(native_, name))
+            return;
+
+        BinaryenAddFunction(
+            native_,
+            name,
+            params,
+            results,
+            nullptr,
+            0,
+            ir_default_return_expr(results));
+    }
 
     std::vector<char> emit(size_t guess_size, Emitter emitter) const
     {
@@ -150,6 +174,69 @@ private:
 
         } else {
             throw std::runtime_error("unsupport type " + std::to_string(type));
+        }
+    }
+
+    void replace_elem(const char* old_name, const char* new_name)
+    {
+
+        struct Segment {
+            std::vector<std::string> data;
+            std::string name;
+            std::string table;
+        };
+
+        using SegmentArray = std::vector<Segment>;
+
+        SegmentArray segments;
+
+        auto segment_num = BinaryenGetNumElementSegments(native_);
+        for (BinaryenIndex i = 0; i < segment_num; i++) {
+            Segment segment;
+            auto seg_ref = BinaryenGetElementSegmentByIndex(native_, i);
+            auto len = BinaryenElementSegmentGetLength(seg_ref);
+            segment.name = BinaryenElementSegmentGetName(seg_ref);
+
+            segment.table = BinaryenElementSegmentGetTable(seg_ref);
+            auto is_passive = BinaryenElementSegmentIsPassive(seg_ref);
+            if (is_passive)
+                throw std::runtime_error("unsupport passive segment");
+
+            for (BinaryenIndex k = 0; k < len; k++) {
+                std::string n = BinaryenElementSegmentGetData(seg_ref, k);
+
+                if (n == old_name) {
+                    n = new_name;
+                }
+
+                segment.data.push_back(std::move(n));
+            }
+
+            segments.push_back(std::move(segment));
+        }
+
+        for (auto& seg : segments) {
+            BinaryenRemoveElementSegment(native_, seg.name.c_str());
+        }
+
+        for (auto& seg : segments) {
+
+            std::vector<const char*> func_names;
+            func_names.resize(seg.data.size());
+
+            std::transform(
+                seg.data.begin(),
+                seg.data.end(),
+                func_names.begin(),
+                [](auto& x) { return x.c_str(); });
+
+            BinaryenAddActiveElementSegment(
+                native_,
+                seg.table.c_str(),
+                seg.name.c_str(),
+                func_names.data(),
+                func_names.size(),
+                ir_const(BinaryenTypeInt32(), 0));
         }
     }
 };
