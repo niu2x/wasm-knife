@@ -14,7 +14,9 @@ static void usage(const char* program_name) { std::cerr << "Usage" << std::endl;
 struct Config {
     std::string output;
     std::string func_names;
+    std::string config;
     bool text;
+    bool debug;
 };
 
 class Module {
@@ -79,6 +81,7 @@ public:
     {
         auto func = BinaryenGetFunction(native_, name);
         if (func) {
+            std::clog << "trim " << name << std::endl;
             auto params_type = BinaryenFunctionGetParams(func);
             auto results_type = BinaryenFunctionGetResults(func);
             BinaryenRemoveFunction(native_, name);
@@ -88,6 +91,8 @@ public:
             add_empty_func(placeholder_name.c_str(), params_type, results_type);
 
             replace_elem(name, placeholder_name.c_str());
+        } else {
+            std::clog << "no " << name << std::endl;
         }
     }
 
@@ -256,16 +261,43 @@ std::vector<std::string> split(const std::string& str, const std::string& delim)
     return result;
 }
 
+std::vector<std::string> read_func_names(const char* config)
+{
+
+    std::vector<std::string> names;
+
+    std::ifstream file(config);
+
+    if (!file.is_open()) {
+        return {};
+    }
+
+    std::string line;
+
+    while (std::getline(file, line)) {
+        if (line[0] == '-' && line[1] == ' ') {
+            line = split(line, " ")[1];
+            names.push_back(std::move(line));
+        }
+    }
+
+    file.close();
+
+    return names;
+}
+
 int main(int argc, char* argv[])
 {
     Config config = {
         .output = "",
         .func_names = "",
+        .config = "",
         .text = false,
+        .debug = false,
     };
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:o:t")) != -1) {
+    while ((opt = getopt(argc, argv, "c:f:go:t")) != -1) {
         switch (opt) {
             case 'f':
                 config.func_names = optarg;
@@ -274,8 +306,16 @@ int main(int argc, char* argv[])
                 config.output = optarg;
                 break;
 
+            case 'c':
+                config.config = optarg;
+                break;
+
             case 't':
                 config.text = true;
+                break;
+
+            case 'g':
+                config.debug = true;
                 break;
 
             default: /* '?' */
@@ -308,11 +348,20 @@ int main(int argc, char* argv[])
         }
     }
 
+    if (config.config != "") {
+        auto func_names = read_func_names(config.config.c_str());
+        for (auto& x : func_names) {
+            module->trim_func(x.c_str());
+        }
+    }
+
     std::clog << "validate" << std::endl;
     if (!module->validate()) {
         std::cerr << "module validate fail" << std::endl;
         return EXIT_FAILURE;
     }
+
+    BinaryenSetDebugInfo(config.debug);
 
     std::clog << "emit" << std::endl;
     if (config.text) {
