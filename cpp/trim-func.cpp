@@ -82,11 +82,6 @@ public:
     void trim_func(const char* name)
     {
 
-        if (is_export_func(name)) {
-            std::clog << "cannot trim exported " << name << std::endl;
-            return;
-        }
-
         auto func = BinaryenGetFunction(native_, name);
         if (func) {
             std::clog << "trim " << name << std::endl;
@@ -94,12 +89,18 @@ public:
             auto results_type = BinaryenFunctionGetResults(func);
             BinaryenRemoveFunction(native_, name);
 
-            auto placeholder_name
-                = get_placeholder_func_name(params_type, results_type);
-            add_empty_func(placeholder_name.c_str(), params_type, results_type);
+            if (is_export_func(name)) {
+                add_empty_func(name, params_type, results_type);
+            } else {
+                auto placeholder_name
+                    = get_placeholder_func_name(params_type, results_type);
+                add_empty_func(
+                    placeholder_name.c_str(),
+                    params_type,
+                    results_type);
 
-            names_transform_[name] = placeholder_name;
-
+                names_transform_[name] = placeholder_name;
+            }
         } else {
             std::clog << "no " << name << std::endl;
         }
