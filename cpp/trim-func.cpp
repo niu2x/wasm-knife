@@ -6,6 +6,7 @@
 #include <iterator>
 #include <fstream>
 #include <vector>
+#include <stdexcept>
 
 static void usage(const char* program_name) { std::cerr << "Usage" << std::endl; }
 
@@ -65,6 +66,26 @@ public:
 
     std::vector<char> emit_text() const { return emit(BinaryenModuleWriteText); }
 
+    void trim_func(const char* name)
+    {
+        auto func = BinaryenGetFunction(native_, name);
+        if (func) {
+            auto params_type = BinaryenFunctionGetParams(func);
+            auto results_type = BinaryenFunctionGetResults(func);
+            BinaryenRemoveFunction(native_, name);
+            BinaryenAddFunction(
+                native_,
+                name,
+                params_type,
+                results_type,
+                nullptr,
+                0,
+                ir_default_return_expr(results_type));
+        }
+    }
+
+    bool validate() const { return BinaryenModuleValidate(native_); }
+
 private:
     BinaryenModuleRef native_;
 
@@ -82,6 +103,45 @@ private:
         buf.resize(writen_size);
 
         return buf;
+    }
+
+    BinaryenExpressionRef ir_default_return_expr(BinaryenType results_type)
+    {
+        return ir_return_expr(ir_default_value_expr(results_type));
+    }
+
+    BinaryenExpressionRef ir_return_expr(BinaryenExpressionRef value)
+    {
+        return BinaryenReturn(native_, value);
+    }
+
+    BinaryenExpressionRef ir_default_value_expr(BinaryenType results_type)
+    {
+        if (results_type == BinaryenTypeNone()) {
+            return nullptr;
+        } else {
+            return ir_const(results_type, 0);
+        }
+    }
+
+    template <class T>
+    BinaryenExpressionRef ir_const(BinaryenType type, const T& v)
+    {
+        if (type == BinaryenTypeInt32()) {
+            return BinaryenConst(native_, BinaryenLiteralInt32(v));
+
+        } else if (type == BinaryenTypeInt64()) {
+            return BinaryenConst(native_, BinaryenLiteralInt64(v));
+
+        } else if (type == BinaryenTypeFloat32()) {
+            return BinaryenConst(native_, BinaryenLiteralFloat32(v));
+
+        } else if (type == BinaryenTypeFloat64()) {
+            return BinaryenConst(native_, BinaryenLiteralFloat64(v));
+
+        } else {
+            throw std::runtime_error("unsupport type " + std::to_string(type));
+        }
     }
 };
 
@@ -138,6 +198,21 @@ int main(int argc, char* argv[])
     auto module = Module::parse_binary(wasm_path);
     if (!module) {
         std::cerr << "parse_binary fail" << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    if (config.func_names != "") {
+
+        auto func_names = split(config.func_names, ",");
+
+        for (auto& x : func_names) {
+            module->trim_func(x.c_str());
+        }
+    }
+
+    if (!module->validate()) {
+        std::cerr << "module validate fail" << std::endl;
+        return EXIT_FAILURE;
     }
 
     if (config.text) {
