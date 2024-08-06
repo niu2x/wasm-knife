@@ -207,15 +207,6 @@ public:
         }
     }
 
-    BinaryenExpressionRef replace_body(BinaryenExpressionRef old_body)
-    {
-        BinaryenExprWalker walker;
-        BinaryenExprWalker::Listener listener;
-        walker.walk(old_body, &listener);
-        // return ir_return_expr(nullptr);
-        return nullptr;
-    }
-
     void replace_elem()
     {
 
@@ -382,8 +373,39 @@ private:
         }
     }
 
-    std::map<std::string, std::string> names_transform_;
+    using NameTransform = std::map<std::string, std::string>;
+    NameTransform names_transform_;
     std::map<std::string, bool> exported_internal_names_;
+
+    class ReplaceCallListner : public BinaryenExprWalker::Listener {
+    public:
+        ReplaceCallListner(const NameTransform* t)
+        : names_transform_(t)
+        {
+        }
+        virtual ~ReplaceCallListner() { }
+
+        void enter_call(BinaryenExpressionRef ref) override
+        {
+            auto target = BinaryenCallGetTarget(ref);
+            auto it = names_transform_->find(target);
+            if (it != names_transform_->end()) {
+                BinaryenCallSetTarget(ref, it->second.c_str());
+            }
+        }
+
+    private:
+        const NameTransform* names_transform_;
+    };
+
+    BinaryenExpressionRef replace_body(BinaryenExpressionRef old_body)
+    {
+        BinaryenExprWalker walker;
+        ReplaceCallListner listener(&names_transform_);
+        walker.walk(old_body, &listener);
+        // return ir_return_expr(nullptr);
+        return nullptr;
+    }
 };
 
 std::vector<std::string> split(const std::string& str, const std::string& delim)
