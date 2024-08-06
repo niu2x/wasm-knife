@@ -128,6 +128,7 @@ private:
     BinaryenExpressionRef ir_const(BinaryenType type, const T& v)
     {
         if (type == BinaryenTypeInt32()) {
+
             return BinaryenConst(native_, BinaryenLiteralInt32(v));
 
         } else if (type == BinaryenTypeInt64()) {

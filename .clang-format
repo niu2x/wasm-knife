@@ -1,6 +1,7 @@
 ﻿---
+Language: Cpp 
 BasedOnStyle: WebKit
-ColumnLimit: '100'
+ColumnLimit: '80'
 ConstructorInitializerIndentWidth: '0'
 TabWidth: '4'
 UseTab: Never
