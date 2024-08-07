@@ -17,9 +17,9 @@ export class WasmLoader {
 
 	static async loadFromFile(path) {
 		if (path.endsWith(".wasm")) {
-			return this.loadBinary(path)
+			return await this.loadBinary(path)
 		} else if (path.endsWith(".wat")) {
-			return this.loadText(path)
+			return await this.loadText(path)
 		} 
 		throw new Error(`cannot load from ${path}`);
 	}
