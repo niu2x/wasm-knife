@@ -469,10 +469,7 @@ public:
             std::clog << "replace_call: "
                       << "func_" << i << std::endl;
             if (body) {
-                auto new_body = replace_body(body);
-                if (new_body) {
-                    BinaryenFunctionSetBody(func, new_body);
-                }
+                replace_body(body);
             }
         }
     }
@@ -484,6 +481,7 @@ public:
             std::vector<std::string> data;
             std::string name;
             std::string table;
+            BinaryenExpressionRef offset;
         };
 
         using SegmentArray = std::vector<Segment>;
@@ -496,6 +494,7 @@ public:
             auto seg_ref = BinaryenGetElementSegmentByIndex(native_, i);
             auto len = BinaryenElementSegmentGetLength(seg_ref);
             segment.name = BinaryenElementSegmentGetName(seg_ref);
+            segment.offset = BinaryenElementSegmentGetOffset(seg_ref);
 
             segment.table = BinaryenElementSegmentGetTable(seg_ref);
             auto is_passive = BinaryenElementSegmentIsPassive(seg_ref);
@@ -537,7 +536,7 @@ public:
                 seg.name.c_str(),
                 func_names.data(),
                 func_names.size(),
-                ir_const(BinaryenTypeInt32(), 0));
+                seg.offset);
         }
     }
 
@@ -668,13 +667,11 @@ private:
         const NameTransform* names_transform_;
     };
 
-    BinaryenExpressionRef replace_body(BinaryenExpressionRef old_body)
+    void replace_body(BinaryenExpressionRef old_body)
     {
         BinaryenExprWalker walker;
         ReplaceCallListner listener(&names_transform_);
         walker.walk(old_body, &listener);
-        // return ir_return_expr(nullptr);
-        return nullptr;
     }
 };
 
