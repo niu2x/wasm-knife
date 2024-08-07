@@ -20,6 +20,103 @@ struct Config {
     bool debug;
 };
 
+// class Expression {
+// public:
+//   enum Id {
+//     InvalidId = 0,
+//     BlockId,
+//     IfId,
+//     LoopId,
+//     BreakId,
+//     SwitchId,
+//     CallId,
+//     CallIndirectId,
+//     LocalGetId,
+//     LocalSetId,
+//     GlobalGetId,
+//     GlobalSetId,
+//     LoadId,
+//     StoreId,
+//     ConstId,
+//     UnaryId,
+//     BinaryId,
+//     SelectId,
+//     DropId,
+//     ReturnId,
+//     MemorySizeId,
+//     MemoryGrowId,
+//     NopId,
+//     UnreachableId,
+//     AtomicRMWId,
+//     AtomicCmpxchgId,
+//     AtomicWaitId,
+//     AtomicNotifyId,
+//     AtomicFenceId,
+//     SIMDExtractId,
+//     SIMDReplaceId,
+//     SIMDShuffleId,
+//     SIMDTernaryId,
+//     SIMDShiftId,
+//     SIMDLoadId,
+//     SIMDLoadStoreLaneId,
+//     MemoryInitId,
+//     DataDropId,
+//     MemoryCopyId,
+//     MemoryFillId,
+//     PopId,
+//     RefNullId,
+//     RefIsNullId,
+//     RefFuncId,
+//     RefEqId,
+//     TableGetId,
+//     TableSetId,
+//     TableSizeId,
+//     TableGrowId,
+//     TableFillId,
+//     TableCopyId,
+//     TryId,
+//     TryTableId,
+//     ThrowId,
+//     RethrowId,
+//     ThrowRefId,
+//     TupleMakeId,
+//     TupleExtractId,
+//     RefI31Id,
+//     I31GetId,
+//     CallRefId,
+//     RefTestId,
+//     RefCastId,
+//     BrOnId,
+//     StructNewId,
+//     StructGetId,
+//     StructSetId,
+//     ArrayNewId,
+//     ArrayNewDataId,
+//     ArrayNewElemId,
+//     ArrayNewFixedId,
+//     ArrayGetId,
+//     ArraySetId,
+//     ArrayLenId,
+//     ArrayCopyId,
+//     ArrayFillId,
+//     ArrayInitDataId,
+//     ArrayInitElemId,
+//     RefAsId,
+//     StringNewId,
+//     StringConstId,
+//     StringMeasureId,
+//     StringEncodeId,
+//     StringConcatId,
+//     StringEqId,
+//     StringWTF16GetId,
+//     StringSliceWTFId,
+//     ContBindId,
+//     ContNewId,
+//     ResumeId,
+//     SuspendId,
+//     NumExpressionIds
+//   };
+
 class BinaryenExprWalker {
 public:
     class Listener {
@@ -33,6 +130,17 @@ public:
         ENTER_EXIT(const);
         ENTER_EXIT(call_indirect);
         ENTER_EXIT(call);
+        ENTER_EXIT(global_set);
+        ENTER_EXIT(global_get);
+
+        ENTER_EXIT(local_set);
+        ENTER_EXIT(local_get);
+        ENTER_EXIT(binary);
+        ENTER_EXIT(break);
+        ENTER_EXIT(load);
+        ENTER_EXIT(store);
+        ENTER_EXIT(unary);
+        ENTER_EXIT(if);
     };
 
     BinaryenExprWalker() { }
@@ -75,6 +183,22 @@ private:
             listener->exit_call(expr);
         }
 
+        else if (id == If_ID) {
+            listener->enter_if(expr);
+
+            do_walk(BinaryenIfGetCondition(expr), listener);
+
+            if (auto cond = BinaryenIfGetIfTrue(expr)) {
+                do_walk(cond, listener);
+            }
+
+            if (auto cond = BinaryenIfGetIfFalse(expr)) {
+                do_walk(cond, listener);
+            }
+
+            listener->exit_if(expr);
+        }
+
         else if (id == Const_ID) {
             listener->enter_const(expr);
             listener->exit_const(expr);
@@ -89,6 +213,70 @@ private:
             }
 
             listener->exit_call_indirect(expr);
+        }
+
+        else if (id == Break_ID) {
+            listener->enter_break(expr);
+            if (auto cond = BinaryenBreakGetCondition(expr)) {
+                do_walk(cond, listener);
+            }
+
+            if (auto cond = BinaryenBreakGetValue(expr)) {
+                do_walk(cond, listener);
+            }
+            listener->exit_break(expr);
+        }
+
+        else if (id == Binary_ID) {
+            listener->enter_binary(expr);
+
+            // do_walk(BinaryenBinaryGetOp(expr), listener);
+            do_walk(BinaryenBinaryGetLeft(expr), listener);
+            do_walk(BinaryenBinaryGetRight(expr), listener);
+
+            listener->exit_binary(expr);
+        }
+
+        else if (id == GlobalSet_ID) {
+            listener->enter_global_set(expr);
+            do_walk(BinaryenGlobalSetGetValue(expr), listener);
+            listener->exit_global_set(expr);
+        }
+
+        else if (id == GlobalGet_ID) {
+            listener->enter_global_get(expr);
+            listener->exit_global_get(expr);
+        }
+
+        else if (id == Unary_ID) {
+            listener->enter_unary(expr);
+            // do_walk(BinaryenUnaryGetOp(expr), listener);
+            do_walk(BinaryenUnaryGetValue(expr), listener);
+            listener->exit_unary(expr);
+        }
+
+        else if (id == Load_ID) {
+            listener->enter_load(expr);
+            do_walk(BinaryenLoadGetPtr(expr), listener);
+            listener->exit_load(expr);
+        }
+
+        else if (id == Store_ID) {
+            listener->enter_store(expr);
+            do_walk(BinaryenStoreGetPtr(expr), listener);
+            do_walk(BinaryenStoreGetValue(expr), listener);
+            listener->exit_store(expr);
+        }
+
+        else if (id == LocalSet_ID) {
+            listener->enter_local_set(expr);
+            do_walk(BinaryenLocalSetGetValue(expr), listener);
+            listener->exit_local_set(expr);
+        }
+
+        else if (id == LocalGet_ID) {
+            listener->enter_local_get(expr);
+            listener->exit_local_get(expr);
         }
 
         else if (id == Return_ID) {
@@ -200,9 +388,13 @@ public:
         for (BinaryenIndex i = 0; i < func_num; i++) {
             auto func = BinaryenGetFunctionByIndex(native_, i);
             auto body = BinaryenFunctionGetBody(func);
-            auto new_body = replace_body(body);
-            if (new_body) {
-                BinaryenFunctionSetBody(func, new_body);
+            std::clog << "replace_call: "
+                      << "func_" << i << std::endl;
+            if (body) {
+                auto new_body = replace_body(body);
+                if (new_body) {
+                    BinaryenFunctionSetBody(func, new_body);
+                }
             }
         }
     }
