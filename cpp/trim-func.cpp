@@ -141,6 +141,14 @@ public:
         ENTER_EXIT(store);
         ENTER_EXIT(unary);
         ENTER_EXIT(if);
+        ENTER_EXIT(drop);
+        ENTER_EXIT(loop);
+        ENTER_EXIT(unreachable);
+        ENTER_EXIT(select);
+        ENTER_EXIT(memory_size);
+        ENTER_EXIT(memory_grow);
+        ENTER_EXIT(nop);
+        ENTER_EXIT(switch);
     };
 
     BinaryenExprWalker() { }
@@ -162,8 +170,10 @@ private:
 
         auto id = BinaryenExpressionGetId(expr);
 
-        if (false /*id == Nop_ID */) {
+        if (id == Nop_ID) {
 
+            listener->enter_nop(expr);
+            listener->exit_nop(expr);
         } else if (id == Block_ID) {
             listener->enter_block(expr);
 
@@ -181,6 +191,68 @@ private:
             }
 
             listener->exit_call(expr);
+        }
+
+        else if (id == Drop_ID) {
+            listener->enter_drop(expr);
+
+            do_walk(BinaryenDropGetValue(expr), listener);
+
+            listener->exit_drop(expr);
+        }
+
+        else if (id == MemorySize_ID) {
+            listener->enter_memory_size(expr);
+            listener->exit_memory_size(expr);
+        }
+
+        else if (id == MemoryGrow_ID) {
+            listener->enter_memory_grow(expr);
+
+            do_walk(BinaryenMemoryGrowGetDelta(expr), listener);
+
+            listener->exit_memory_grow(expr);
+        }
+
+        else if (id == Switch_ID) {
+            listener->enter_switch(expr);
+
+            do_walk(BinaryenSwitchGetCondition(expr), listener);
+
+            if (auto v = BinaryenSwitchGetValue(expr)) {
+                do_walk(v, listener);
+            }
+
+            listener->exit_switch(expr);
+        }
+
+        else if (id == Select_ID) {
+            listener->enter_select(expr);
+
+            do_walk(BinaryenSelectGetCondition(expr), listener);
+
+            if (auto cond = BinaryenSelectGetIfTrue(expr)) {
+                do_walk(cond, listener);
+            }
+
+            if (auto cond = BinaryenSelectGetIfFalse(expr)) {
+                do_walk(cond, listener);
+            }
+
+            listener->exit_select(expr);
+        }
+
+        else if (id == Loop_ID) {
+            listener->enter_loop(expr);
+
+            do_walk(BinaryenLoopGetBody(expr), listener);
+
+            listener->exit_loop(expr);
+        }
+
+        else if (id == Unreachable_ID) {
+            listener->enter_unreachable(expr);
+            listener->exit_unreachable(expr);
         }
 
         else if (id == If_ID) {
