@@ -15,8 +15,7 @@
   "type": "module",
   "bin": {
     "wasm-trim-func": "bin/trim-func.js",
-    "wasm-trim-merge": "bin/trim-merge.js",
-    "wasm-dump-debug-info": "bin/dump-debug-info.js"
+    "wasm-trim-merge": "bin/trim-merge.js"
   },
   "author": "niu2x",
   "license": "ISC",

@@ -12,7 +12,29 @@
 
 #define MERGE_COMMON_SIGNATURE 1
 
-static void usage(const char* program_name) { std::cerr << "Usage" << std::endl; }
+static void usage(const char* program_name) { 
+std::cout << R"RAW(Usage
+wasm-trim-func [OPTION]... [FILE]
+
+Options
+- -c, config file, one function name per line, start with '- '
+- -g, output wasm with debug info
+- -f, function name[s], separated by ','
+- -h, show help
+- -n, dry run
+- -o, output file
+- -t, output WebAssembly Text
+
+Example
+wasm-trim-func -f main -t wasm/w2.wasm)RAW" << std::endl;
+
+}
+
+#if WASM_KNIFE_EMSCRIPTEN == 1
+#define OUTPUT_BUFFER_SIZE (256 * (1 << 20))
+#else
+#define OUTPUT_BUFFER_SIZE (1<<30)
+#endif
 
 struct Config {
     std::string output;
@@ -376,6 +398,7 @@ public:
     {
         std::ifstream file(wasm_path, std::ios::binary);
         if (!file) {
+            std::cerr << "fail to read wasm_path: " << wasm_path << std::endl; 
             return nullptr;
         }
 
@@ -806,7 +829,7 @@ int main(int argc, char* argv[])
     std::clog << "emit" << std::endl;
     if (config.text) {
         if (config.output != "") {
-            auto wasm_text = module->emit_text(false, 1 << 30);
+            auto wasm_text = module->emit_text(false, OUTPUT_BUFFER_SIZE);
             std::ofstream file(config.output, std::ios::binary);
             if (file) {
                 file.write(wasm_text.data(), wasm_text.size());
@@ -814,13 +837,13 @@ int main(int argc, char* argv[])
             file.close();
 
         } else {
-            auto wasm_text = module->emit_text(true, 1 << 30);
+            auto wasm_text = module->emit_text(true, OUTPUT_BUFFER_SIZE);
             std::copy(wasm_text.begin(), wasm_text.end(), std::ostream_iterator<char>(std::cout));
         }
 
     } else {
         if (config.output != "") {
-            auto wasm_binary = module->emit_binary(1 << 30);
+            auto wasm_binary = module->emit_binary(OUTPUT_BUFFER_SIZE);
             std::ofstream file(config.output, std::ios::binary);
             if (file) {
                 file.write(wasm_binary.data(), wasm_binary.size());
