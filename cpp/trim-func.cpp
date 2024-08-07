@@ -10,6 +10,8 @@
 #include <vector>
 #include <stdexcept>
 
+#define MERGE_COMMON_SIGNATURE 1
+
 static void usage(const char* program_name) { std::cerr << "Usage" << std::endl; }
 
 struct Config {
@@ -437,8 +439,11 @@ public:
             auto results_type = BinaryenFunctionGetResults(func);
             BinaryenRemoveFunction(native_, name);
 
+#if MERGE_COMMON_SIGNATURE == 1
             if (is_export_func(name)) {
+#endif
                 add_empty_func(name, params_type, results_type);
+#if MERGE_COMMON_SIGNATURE == 1
             } else {
                 auto placeholder_name
                     = get_placeholder_func_name(params_type, results_type);
@@ -449,6 +454,7 @@ public:
 
                 names_transform_[name] = placeholder_name;
             }
+#endif
         } else {
             std::clog << "no " << name << std::endl;
         }
@@ -781,11 +787,16 @@ int main(int argc, char* argv[])
         }
     }
 
+#if MERGE_COMMON_SIGNATURE == 1
     std::clog << "replace_elem" << std::endl;
     module->replace_elem();
 
+#endif
+
+#if MERGE_COMMON_SIGNATURE == 1
     std::clog << "replace_call" << std::endl;
     module->replace_call();
+#endif
 
     std::clog << "validate" << std::endl;
     if (!module->validate()) {
